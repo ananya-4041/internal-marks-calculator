@@ -333,7 +333,7 @@ function renderSavedList() {
     details.className = "saved-details";
     details.textContent = `M1: ${formatNumber(item.module1)}/20 | M2: ${formatNumber(
       item.module2
-    )}/30 | CLA5: ${formatNumber(item.cla5)}/10 — Total: `;
+    )}/30 | CLA5: ${formatNumber(item.cla5)}/10 | Total: `;
 
     const highlight = document.createElement("span");
     highlight.className = "saved-highlight";
