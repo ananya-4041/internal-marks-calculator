@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Internal Marks Calculator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="container">
+    <h1>Internal Marks Calculator</h1>
+
+    <!-- Input Form Card -->
+    <section class="card form-card">
+      <div class="field-group">
+        <label for="subjectName" class="field-label">Subject Name</label>
+        <input type="text" id="subjectName" class="text-input" placeholder="Subject Name (Optional)">
+      </div>
+
+      <div class="modules-grid">
+        <!-- Module 1 -->
+        <div class="module-card">
+          <div class="module-title">Module 1 (20 Marks)</div>
+          <div class="input-grid">
+            <div class="field-group">
+              <label for="fa1" class="field-label">FA1 (Max 10)</label>
+              <input type="number" id="fa1" class="number-input" min="0" max="10" step="any" placeholder="0 - 10">
+            </div>
+            <div class="field-group">
+              <label for="cla1" class="field-label">CLA1 (Max 10)</label>
+              <input type="number" id="cla1" class="number-input" min="0" max="10" step="any" placeholder="0 - 10">
+            </div>
+            <div class="field-group">
+              <label for="fa2" class="field-label">FA2 (Max 20)</label>
+              <input type="number" id="fa2" class="number-input" min="0" max="20" step="any" placeholder="0 - 20">
+            </div>
+            <div class="field-group">
+              <label for="cla2" class="field-label">CLA2 (Max 10)</label>
+              <input type="number" id="cla2" class="number-input" min="0" max="10" step="any" placeholder="0 - 10">
+            </div>
+          </div>
+        </div>
+
+        <!-- Module 2 -->
+        <div class="module-card">
+          <div class="module-title">Module 2 (30 Marks)</div>
+          <div class="input-grid">
+            <div class="field-group">
+              <label for="fa3" class="field-label">FA3 (Max 20)</label>
+              <input type="number" id="fa3" class="number-input" min="0" max="20" step="any" placeholder="0 - 20">
+            </div>
+            <div class="field-group">
+              <label for="cla3" class="field-label">CLA3 (Max 10)</label>
+              <input type="number" id="cla3" class="number-input" min="0" max="10" step="any" placeholder="0 - 10">
+            </div>
+            <div class="field-group">
+              <label for="fa4" class="field-label">FA4 (Max 20)</label>
+              <input type="number" id="fa4" class="number-input" min="0" max="20" step="any" placeholder="0 - 20">
+            </div>
+            <div class="field-group">
+              <label for="cla4" class="field-label">CLA4 (Max 10)</label>
+              <input type="number" id="cla4" class="number-input" min="0" max="10" step="any" placeholder="0 - 10">
+            </div>
+          </div>
+        </div>
+
+        <!-- CLA5 -->
+        <div class="module-card cla5-card">
+          <div class="module-title">CLA5 (10 Marks)</div>
+          <div class="field-group">
+            <label for="cla5" class="field-label">CLA5 (Max 10)</label>
+            <input type="number" id="cla5" class="number-input" min="0" max="10" step="any" placeholder="0 - 10">
+          </div>
+        </div>
+      </div>
+
+      <div id="validationMessage" class="validation-message" role="alert" aria-live="polite"></div>
+
+      <div class="button-row">
+        <button type="button" id="calculateBtn" class="btn btn-primary">Calculate</button>
+        <button type="button" id="resetBtn" class="btn btn-secondary">Reset</button>
+        <button type="button" id="saveSubjectBtn" class="btn btn-accent" disabled>Save Subject</button>
+      </div>
+    </section>
+
+    <!-- Calculation Results Card -->
+    <section id="resultsCard" class="card results-card" hidden>
+      <div class="section-label">Calculation Result</div>
+      <div id="resultSubject" class="result-subject"></div>
+      <div class="results-grid">
+        <div class="result-item">
+          <span class="result-label">Module 1</span>
+          <span id="resModule1" class="result-value">0 / 20</span>
+        </div>
+        <div class="result-item">
+          <span class="result-label">Module 2</span>
+          <span id="resModule2" class="result-value">0 / 30</span>
+        </div>
+        <div class="result-item">
+          <span class="result-label">CLA5</span>
+          <span id="resCla5" class="result-value">0 / 10</span>
+        </div>
+        <div class="result-item result-item-total">
+          <span class="result-label">Total</span>
+          <span id="resTotal" class="result-value">0 / 60</span>
+        </div>
+        <div class="result-item result-item-percentage">
+          <span class="result-label">Percentage</span>
+          <span id="resPercentage" class="result-value">0%</span>
+        </div>
+      </div>
+
+      <div class="button-row results-action-row">
+        <button type="button" id="copyResultBtn" class="btn btn-secondary">Copy Results</button>
+        <button type="button" id="shareResultBtn" class="btn btn-secondary">Share</button>
+      </div>
+      <div id="actionFeedback" class="action-feedback" aria-live="polite"></div>
+    </section>
+
+    <!-- Saved Subjects Section -->
+    <section class="card saved-section">
+      <div class="saved-header">
+        <div class="section-label">Saved Subjects</div>
+        <button type="button" id="clearAllBtn" class="btn btn-text">Clear All</button>
+      </div>
+
+      <div id="savedListEmpty" class="empty-state">No saved calculations.</div>
+      <div id="savedListContainer" class="saved-list" hidden></div>
+    </section>
+
+    <!-- Formula Details Section -->
+    <section class="card collapsible-section">
+      <details>
+        <summary class="collapsible-summary">Formula Reference</summary>
+        <div class="collapsible-content">
+          <div class="formula-block">
+            <div class="formula-name">Module 1 (20 Marks)</div>
+            <div class="formula-math">(FA1 + CLA1 + FA2 + CLA2) / 50 × 20</div>
+            <div class="formula-limits">FA1: max 10 | CLA1: max 10 | FA2: max 20 | CLA2: max 10</div>
+          </div>
+          <div class="formula-block">
+            <div class="formula-name">Module 2 (30 Marks)</div>
+            <div class="formula-math">(FA3 + CLA3 + FA4 + CLA4) / 60 × 30</div>
+            <div class="formula-limits">FA3: max 20 | CLA3: max 10 | FA4: max 20 | CLA4: max 10</div>
+          </div>
+          <div class="formula-block">
+            <div class="formula-name">CLA5 (10 Marks)</div>
+            <div class="formula-math">Raw marks directly</div>
+            <div class="formula-limits">CLA5: max 10</div>
+          </div>
+          <div class="formula-block">
+            <div class="formula-name">Final Total (60 Marks)</div>
+            <div class="formula-math">Module 1 + Module 2 + CLA5</div>
+            <div class="formula-limits">Percentage = (Final Total / 60) × 100</div>
+          </div>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
