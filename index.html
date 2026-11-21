@@ -67,12 +67,33 @@
           </div>
         </div>
 
-        <!-- CLA5 -->
+        <!-- CLA5 & Attendance -->
         <div class="module-card cla5-card">
-          <div class="module-title">CLA5 (10 Marks)</div>
-          <div class="field-group">
-            <label for="cla5" class="field-label">CLA5 (Max 10)</label>
-            <input type="number" id="cla5" class="number-input" min="0" max="10" step="any" placeholder="0 - 10">
+          <div class="module-title">CLA5 &amp; Attendance (10 Marks)</div>
+          <div class="cla5-container">
+            <div class="field-group">
+              <label for="cla5" class="field-label">CLA5 Obtained (Max 10 &rarr; Scaled to 8)</label>
+              <input type="number" id="cla5" class="number-input" min="0" max="10" step="any" placeholder="0 - 10">
+              <div id="cla5Hint" class="field-hint">Scaled: 0 / 8</div>
+            </div>
+
+            <div class="field-group attendance-field-group">
+              <label id="attendanceLabel" class="field-label">Attendance / CLA5 Performance Bonus (Max 2)</label>
+              <div class="option-pills" role="radiogroup" aria-labelledby="attendanceLabel" id="attendanceOptions">
+                <button type="button" class="option-pill" role="radio" aria-checked="false" id="pillBelow80" data-tier-id="below-80" data-marks="0">
+                  <span class="pill-title">Below 80%</span>
+                  <span class="pill-badge">+0 Marks</span>
+                </button>
+                <button type="button" class="option-pill" role="radio" aria-checked="false" id="pill80to90" data-tier-id="80-90" data-marks="1">
+                  <span class="pill-title">80% – 89.99%</span>
+                  <span class="pill-badge">+1 Mark</span>
+                </button>
+                <button type="button" class="option-pill" role="radio" aria-checked="false" id="pillAbove90" data-tier-id="above-90" data-marks="2">
+                  <span class="pill-title">90% &amp; above</span>
+                  <span class="pill-badge">+2 Marks</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -100,8 +121,13 @@
           <span id="resModule2" class="result-value">0 / 30</span>
         </div>
         <div class="result-item">
-          <span class="result-label">CLA5</span>
+          <span class="result-label">CLA5 (Scaled + Bonus)</span>
           <span id="resCla5" class="result-value">0 / 10</span>
+          <span id="resCla5Detail" class="result-subvalue">Scaled: 0 / 8 | Bonus: 0 / 2</span>
+        </div>
+        <div class="result-item">
+          <span class="result-label">Attendance Bonus</span>
+          <span id="resAttendance" class="result-value">0 / 2</span>
         </div>
         <div class="result-item result-item-total">
           <span class="result-label">Total</span>
@@ -147,14 +173,17 @@
             <div class="formula-limits">FA3: max 20 | CLA3: max 10 | FA4: max 20 | CLA4: max 10</div>
           </div>
           <div class="formula-block">
-            <div class="formula-name">CLA5 (10 Marks)</div>
-            <div class="formula-math">Raw marks directly</div>
-            <div class="formula-limits">CLA5: max 10</div>
+            <div class="formula-name">CLA5 (10 Marks = 8 Scaled + 2 Attendance / Performance Bonus)</div>
+            <div class="formula-math">Scaled Marks = (Obtained CLA5 / 10) × 8</div>
+            <div class="formula-math">Final CLA5 = Scaled Marks + Attendance / Performance Bonus</div>
+            <div class="formula-limits">
+              Attendance / Performance Options: Below 80% = 0 Marks | 80%–89.99% (80%–90%) = 1 Mark | 90% and above = 2 Marks
+            </div>
           </div>
           <div class="formula-block">
-            <div class="formula-name">Final Total (60 Marks)</div>
-            <div class="formula-math">Module 1 + Module 2 + CLA5</div>
-            <div class="formula-limits">Percentage = (Final Total / 60) × 100</div>
+            <div class="formula-name">Final Total (60 Marks Max)</div>
+            <div class="formula-math">Module 1 + Module 2 + Final CLA5</div>
+            <div class="formula-limits">Percentage = (Final Total / 60) × 100 | Maximum Internal Marks = 60</div>
           </div>
         </div>
       </details>

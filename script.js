@@ -1,28 +1,99 @@
 /**
  * Internal Marks Calculator
- * Logic for marks computation, validation, local storage persistence,
- * clipboard copy, and sharing.
+ * Logic for academic marks computation, validation, live updates,
+ * local storage persistence, clipboard copying, and native sharing.
  */
 
-// Field limits definition
-const LIMITS = {
-  fa1: { max: 10, label: "FA1" },
-  cla1: { max: 10, label: "CLA1" },
-  fa2: { max: 20, label: "FA2" },
-  cla2: { max: 10, label: "CLA2" },
-  fa3: { max: 20, label: "FA3" },
-  cla3: { max: 10, label: "CLA3" },
-  fa4: { max: 20, label: "FA4" },
-  cla4: { max: 10, label: "CLA4" },
-  cla5: { max: 10, label: "CLA5" }
+/* ==========================================================================
+   1. Central Configuration Section
+   All evaluation formulas, limits, weights, and attendance tiers are configured here.
+   ========================================================================== */
+const CONFIG = {
+  // Input field maximum limits and display labels
+  limits: {
+    fa1: { max: 10, label: "FA1" },
+    cla1: { max: 10, label: "CLA1" },
+    fa2: { max: 20, label: "FA2" },
+    cla2: { max: 10, label: "CLA2" },
+    fa3: { max: 20, label: "FA3" },
+    cla3: { max: 10, label: "CLA3" },
+    fa4: { max: 20, label: "FA4" },
+    cla4: { max: 10, label: "CLA4" },
+    cla5: { max: 10, label: "CLA5" }
+  },
+
+  // Module 1 Weightage & Formula parameters: (Sum / rawMax) * scaledMax
+  module1: {
+    rawMax: 50,
+    scaledMax: 20
+  },
+
+  // Module 2 Weightage & Formula parameters: (Sum / rawMax) * scaledMax
+  module2: {
+    rawMax: 60,
+    scaledMax: 30
+  },
+
+  // CLA5 Weightage parameters:
+  // Scaled: (obtained / rawMax) * scaledMax [max 8]
+  // Bonus: Attendance / Performance Category [max 2]
+  // Total: Scaled + Bonus = 10 Marks
+  cla5: {
+    rawMax: 10,
+    scaledMax: 8,
+    bonusMax: 2,
+    totalMax: 10
+  },
+
+  // Selectable Attendance & CLA5 Performance Bonus Tiers
+  attendanceTiers: [
+    {
+      id: "below-80",
+      label: "Below 80%",
+      bonusMarks: 0,
+      badge: "+0 Marks",
+      minPercent: 0,
+      maxPercent: 79.99
+    },
+    {
+      id: "80-90",
+      label: "80% – 89.99%",
+      altLabel: "80%–90% inclusive",
+      bonusMarks: 1,
+      badge: "+1 Mark",
+      minPercent: 80,
+      maxPercent: 89.99
+    },
+    {
+      id: "above-90",
+      label: "90% and above",
+      altLabel: "Above 90%",
+      bonusMarks: 2,
+      badge: "+2 Marks",
+      minPercent: 90,
+      maxPercent: 100
+    }
+  ],
+
+  // Default selected tier ID ('above-90', '80-90', or 'below-80')
+  defaultTierId: "above-90",
+
+  // Maximum Internal Marks
+  maxTotal: 60,
+
+  // LocalStorage Key
+  storageKey: "internal_marks_saved_subjects"
 };
 
-const STORAGE_KEY = "internal_marks_saved_subjects";
-
-// State variable for the current calculation
+/* ==========================================================================
+   2. State Management
+   ========================================================================== */
+let selectedAttendanceTierId = CONFIG.defaultTierId;
 let currentResult = null;
 
-// DOM Elements
+/* ==========================================================================
+   3. DOM Elements
+   ========================================================================== */
 const subjectNameInput = document.getElementById("subjectName");
 const fa1Input = document.getElementById("fa1");
 const cla1Input = document.getElementById("cla1");
@@ -33,7 +104,9 @@ const cla3Input = document.getElementById("cla3");
 const fa4Input = document.getElementById("fa4");
 const cla4Input = document.getElementById("cla4");
 const cla5Input = document.getElementById("cla5");
+const cla5Hint = document.getElementById("cla5Hint");
 
+const attendancePills = document.querySelectorAll("#attendanceOptions .option-pill");
 const validationMessage = document.getElementById("validationMessage");
 const calculateBtn = document.getElementById("calculateBtn");
 const resetBtn = document.getElementById("resetBtn");
@@ -44,6 +117,8 @@ const resultSubject = document.getElementById("resultSubject");
 const resModule1 = document.getElementById("resModule1");
 const resModule2 = document.getElementById("resModule2");
 const resCla5 = document.getElementById("resCla5");
+const resCla5Detail = document.getElementById("resCla5Detail");
+const resAttendance = document.getElementById("resAttendance");
 const resTotal = document.getElementById("resTotal");
 const resPercentage = document.getElementById("resPercentage");
 
@@ -55,9 +130,13 @@ const clearAllBtn = document.getElementById("clearAllBtn");
 const savedListEmpty = document.getElementById("savedListEmpty");
 const savedListContainer = document.getElementById("savedListContainer");
 
+/* ==========================================================================
+   4. Utility Functions
+   ========================================================================== */
+
 /**
  * Format a number preserving decimal precision up to 2 decimal places.
- * Eliminates redundant trailing zeroes.
+ * Eliminates redundant trailing zeroes (e.g., 8.00 -> 8, 8.50 -> 8.5).
  */
 function formatNumber(val) {
   if (typeof val !== "number" || isNaN(val)) return "0";
@@ -65,12 +144,22 @@ function formatNumber(val) {
 }
 
 /**
- * Clear validation error message.
+ * Retrieve the currently selected attendance tier configuration object.
+ */
+function getSelectedTier() {
+  return (
+    CONFIG.attendanceTiers.find((tier) => tier.id === selectedAttendanceTierId) ||
+    CONFIG.attendanceTiers[0]
+  );
+}
+
+/**
+ * Clear validation error message and restore input border colors.
  */
 function clearValidation() {
   validationMessage.textContent = "";
   validationMessage.classList.remove("active");
-  Object.keys(LIMITS).forEach((key) => {
+  Object.keys(CONFIG.limits).forEach((key) => {
     const el = document.getElementById(key);
     if (el) el.style.borderColor = "";
   });
@@ -92,11 +181,62 @@ function showValidation(msg, elementId = null) {
 }
 
 /**
- * Validate all inputs.
- * Returns an object with parsed numbers, or null if validation fails.
+ * Update the UI pill highlight state to match selectedAttendanceTierId.
  */
-function validateInputs() {
-  clearValidation();
+function updatePillVisuals() {
+  attendancePills.forEach((pill) => {
+    const tierId = pill.getAttribute("data-tier-id");
+    const isSelected = tierId === selectedAttendanceTierId;
+    pill.classList.toggle("selected", isSelected);
+    pill.setAttribute("aria-checked", isSelected ? "true" : "false");
+  });
+}
+
+/**
+ * Set the attendance tier, highlight the selection, and trigger instant calculation.
+ */
+function setAttendanceTier(tierId) {
+  selectedAttendanceTierId = tierId;
+  updatePillVisuals();
+  updateCla5Hint();
+  // Live calculation update
+  calculateMarks(true);
+}
+
+/**
+ * Update the CLA5 helper hint in real time (e.g., "Scaled: 8 / 8 (+2 Bonus = 10 / 10)").
+ */
+function updateCla5Hint() {
+  if (!cla5Hint) return;
+  const rawVal = cla5Input.value.trim();
+  const tier = getSelectedTier();
+  const bonus = tier ? tier.bonusMarks : 0;
+
+  if (rawVal === "" || isNaN(Number(rawVal))) {
+    cla5Hint.textContent = `Scaled: 0 / ${CONFIG.cla5.scaledMax} (+${bonus} Bonus)`;
+    return;
+  }
+
+  const num = Number(rawVal);
+  if (num < 0 || num > CONFIG.cla5.rawMax) {
+    cla5Hint.textContent = `Input must be between 0 and ${CONFIG.cla5.rawMax}`;
+    return;
+  }
+
+  const scaled = (num / CONFIG.cla5.rawMax) * CONFIG.cla5.scaledMax;
+  const totalCla5 = Math.min(scaled + bonus, CONFIG.cla5.totalMax);
+  cla5Hint.textContent = `Scaled: ${formatNumber(scaled)} / ${CONFIG.cla5.scaledMax} (+${bonus} Bonus = ${formatNumber(totalCla5)} / ${CONFIG.cla5.totalMax})`;
+}
+
+/**
+ * Validate all inputs.
+ * @param {boolean} silent - If true, do not display error messages for empty fields (used for live typing).
+ * @returns {object|null} Parsed values or null if invalid.
+ */
+function validateInputs(silent = false) {
+  if (!silent) {
+    clearValidation();
+  }
 
   const inputs = {
     fa1: fa1Input.value.trim(),
@@ -114,26 +254,34 @@ function validateInputs() {
 
   for (const [key, val] of Object.entries(inputs)) {
     if (val === "") {
-      showValidation(`Please enter marks for ${LIMITS[key].label}.`, key);
+      if (!silent) {
+        showValidation(`Please enter marks for ${CONFIG.limits[key].label}.`, key);
+      }
       return null;
     }
 
     const num = Number(val);
     if (isNaN(num)) {
-      showValidation(`${LIMITS[key].label} must be a valid number.`, key);
+      if (!silent) {
+        showValidation(`${CONFIG.limits[key].label} must be a valid number.`, key);
+      }
       return null;
     }
 
     if (num < 0) {
-      showValidation(`${LIMITS[key].label} cannot be negative.`, key);
+      if (!silent) {
+        showValidation(`${CONFIG.limits[key].label} cannot be negative.`, key);
+      }
       return null;
     }
 
-    if (num > LIMITS[key].max) {
-      showValidation(
-        `${LIMITS[key].label} cannot exceed the maximum of ${LIMITS[key].max}.`,
-        key
-      );
+    if (num > CONFIG.limits[key].max) {
+      if (!silent) {
+        showValidation(
+          `${CONFIG.limits[key].label} cannot exceed the maximum of ${CONFIG.limits[key].max}.`,
+          key
+        );
+      }
       return null;
     }
 
@@ -143,38 +291,51 @@ function validateInputs() {
   return parsed;
 }
 
-/**
- * Calculation formulas:
- * Module 1 (20 Marks) = (FA1 + CLA1 + FA2 + CLA2) / 50 * 20
- * Module 2 (30 Marks) = (FA3 + CLA3 + FA4 + CLA4) / 60 * 30
- * CLA5     (10 Marks) = Raw CLA5 marks
- * Final Total (60 Marks) = Module 1 + Module 2 + CLA5
- * Percentage = (Final Total / 60) * 100
- */
-function calculateMarks() {
-  const values = validateInputs();
+/* ==========================================================================
+   5. Core Calculation Engine
+   Academic Scheme:
+   - Module 1 (20 Marks) = (FA1 + CLA1 + FA2 + CLA2) / 50 * 20
+   - Module 2 (30 Marks) = (FA3 + CLA3 + FA4 + CLA4) / 60 * 30
+   - CLA5 (10 Marks)     = (Obtained / 10) * 8 + Attendance Bonus (0, 1, or 2)
+   - Final Total (60 M)  = Module 1 + Module 2 + CLA5
+   - Percentage          = (Final Total / 60) * 100
+   ========================================================================== */
+function calculateMarks(silent = false) {
+  const values = validateInputs(silent);
   if (!values) {
-    currentResult = null;
-    saveSubjectBtn.disabled = true;
+    if (!silent) {
+      currentResult = null;
+      saveSubjectBtn.disabled = true;
+    }
     return;
   }
 
-  // Module 1 calculation
+  clearValidation();
+
+  // 1. Module 1 calculation (Max 20)
   const m1RawSum = values.fa1 + values.cla1 + values.fa2 + values.cla2;
-  const module1 = (m1RawSum / 50) * 20;
+  const module1 = (m1RawSum / CONFIG.module1.rawMax) * CONFIG.module1.scaledMax;
 
-  // Module 2 calculation
+  // 2. Module 2 calculation (Max 30)
   const m2RawSum = values.fa3 + values.cla3 + values.fa4 + values.cla4;
-  const module2 = (m2RawSum / 60) * 30;
+  const module2 = (m2RawSum / CONFIG.module2.rawMax) * CONFIG.module2.scaledMax;
 
-  // CLA5 raw marks
-  const cla5 = values.cla5;
+  // 3. CLA5 calculation (Max 10):
+  // Scale obtained CLA5 marks to 8: (Obtained / Maximum) * 8
+  const cla5Scaled = (values.cla5 / CONFIG.cla5.rawMax) * CONFIG.cla5.scaledMax;
 
-  // Final total marks out of 60
-  const total = module1 + module2 + cla5;
+  // Attendance & Performance Bonus (0, 1, or 2 Marks)
+  const tier = getSelectedTier();
+  const attendanceBonus = tier ? tier.bonusMarks : 0;
 
-  // Percentage
-  const percentage = (total / 60) * 100;
+  // Final CLA5 = Scaled Marks + Performance Bonus (Max 10 Marks)
+  const cla5Total = Math.min(cla5Scaled + attendanceBonus, CONFIG.cla5.totalMax);
+
+  // 4. Overall Internal Marks Total (Max 60 Marks)
+  const total = Math.min(module1 + module2 + cla5Total, CONFIG.maxTotal);
+
+  // 5. Overall Percentage
+  const percentage = (total / CONFIG.maxTotal) * 100;
 
   const subjectName = subjectNameInput.value.trim();
 
@@ -183,7 +344,10 @@ function calculateMarks() {
     rawValues: values,
     module1,
     module2,
-    cla5,
+    cla5Scaled,
+    attendanceBonus,
+    attendanceTier: tier.label,
+    cla5: cla5Total,
     total,
     percentage,
     calculatedAt: new Date().toISOString()
@@ -198,10 +362,16 @@ function calculateMarks() {
     resultSubject.style.display = "none";
   }
 
-  resModule1.textContent = `${formatNumber(module1)} / 20`;
-  resModule2.textContent = `${formatNumber(module2)} / 30`;
-  resCla5.textContent = `${formatNumber(cla5)} / 10`;
-  resTotal.textContent = `${formatNumber(total)} / 60`;
+  resModule1.textContent = `${formatNumber(module1)} / ${CONFIG.module1.scaledMax}`;
+  resModule2.textContent = `${formatNumber(module2)} / ${CONFIG.module2.scaledMax}`;
+  resCla5.textContent = `${formatNumber(cla5Total)} / ${CONFIG.cla5.totalMax}`;
+  if (resCla5Detail) {
+    resCla5Detail.textContent = `Scaled: ${formatNumber(cla5Scaled)} / ${CONFIG.cla5.scaledMax} | Bonus: ${attendanceBonus} / ${CONFIG.cla5.bonusMax}`;
+  }
+  if (resAttendance) {
+    resAttendance.textContent = `${attendanceBonus} / ${CONFIG.cla5.bonusMax}`;
+  }
+  resTotal.textContent = `${formatNumber(total)} / ${CONFIG.maxTotal}`;
   resPercentage.textContent = `${formatNumber(percentage)}%`;
 
   resultsCard.hidden = false;
@@ -210,7 +380,7 @@ function calculateMarks() {
 }
 
 /**
- * Reset all input fields and hide the result card.
+ * Reset all inputs, clear state, restore default attendance option, and hide results.
  */
 function resetForm() {
   subjectNameInput.value = "";
@@ -224,6 +394,10 @@ function resetForm() {
   cla4Input.value = "";
   cla5Input.value = "";
 
+  selectedAttendanceTierId = CONFIG.defaultTierId;
+  updatePillVisuals();
+  updateCla5Hint();
+
   clearValidation();
   resultsCard.hidden = true;
   saveSubjectBtn.disabled = true;
@@ -231,21 +405,19 @@ function resetForm() {
   currentResult = null;
 }
 
-/**
- * Retrieve saved calculations from localStorage.
- */
+/* ==========================================================================
+   6. LocalStorage Persistence
+   ========================================================================== */
+
 function getSavedCalculations() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(CONFIG.storageKey);
     return raw ? JSON.parse(raw) : [];
   } catch (e) {
     return [];
   }
 }
 
-/**
- * Save current calculation to localStorage.
- */
 function saveCurrentCalculation() {
   if (!currentResult) return;
 
@@ -258,6 +430,9 @@ function saveCurrentCalculation() {
     module1: currentResult.module1,
     module2: currentResult.module2,
     cla5: currentResult.cla5,
+    cla5Scaled: currentResult.cla5Scaled,
+    attendanceBonus: currentResult.attendanceBonus,
+    attendanceTier: currentResult.attendanceTier,
     total: currentResult.total,
     percentage: currentResult.percentage,
     date: new Date().toLocaleDateString()
@@ -266,7 +441,7 @@ function saveCurrentCalculation() {
   saved.push(itemToSave);
 
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    localStorage.setItem(CONFIG.storageKey, JSON.stringify(saved));
     renderSavedList();
     actionFeedback.textContent = `"${subjectTitle}" saved successfully.`;
   } catch (err) {
@@ -274,26 +449,20 @@ function saveCurrentCalculation() {
   }
 }
 
-/**
- * Delete a specific saved calculation by ID.
- */
 function deleteCalculation(id) {
   let saved = getSavedCalculations();
   saved = saved.filter((item) => item.id !== id);
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    localStorage.setItem(CONFIG.storageKey, JSON.stringify(saved));
   } catch (err) {
     // Ignore storage errors on deletion
   }
   renderSavedList();
 }
 
-/**
- * Clear all saved calculations from localStorage.
- */
 function clearAllCalculations() {
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(CONFIG.storageKey);
   } catch (err) {
     // Ignore storage errors
   }
@@ -301,9 +470,6 @@ function clearAllCalculations() {
   actionFeedback.textContent = "All saved calculations cleared.";
 }
 
-/**
- * Render saved calculations list.
- */
 function renderSavedList() {
   const saved = getSavedCalculations();
 
@@ -331,9 +497,11 @@ function renderSavedList() {
 
     const details = document.createElement("div");
     details.className = "saved-details";
+
+    const attText = item.attendanceBonus !== undefined ? ` | Att: ${item.attendanceBonus}/2` : "";
     details.textContent = `M1: ${formatNumber(item.module1)}/20 | M2: ${formatNumber(
       item.module2
-    )}/30 | CLA5: ${formatNumber(item.cla5)}/10 | Total: `;
+    )}/30 | CLA5: ${formatNumber(item.cla5)}/10${attText} | Total: `;
 
     const highlight = document.createElement("span");
     highlight.className = "saved-highlight";
@@ -362,9 +530,10 @@ function renderSavedList() {
   });
 }
 
-/**
- * Generate formatted text for sharing or copying.
- */
+/* ==========================================================================
+   7. Copy & Share Support
+   ========================================================================== */
+
 function generateResultText() {
   if (!currentResult) return "";
 
@@ -376,15 +545,14 @@ function generateResultText() {
     title,
     `Module 1: ${formatNumber(currentResult.module1)} / 20`,
     `Module 2: ${formatNumber(currentResult.module2)} / 30`,
-    `CLA5: ${formatNumber(currentResult.cla5)} / 10`,
+    `CLA5 (Scaled): ${formatNumber(currentResult.cla5Scaled)} / 8`,
+    `Attendance / Performance: ${formatNumber(currentResult.attendanceBonus)} / 2 (${currentResult.attendanceTier})`,
+    `Final CLA5: ${formatNumber(currentResult.cla5)} / 10`,
     `Total: ${formatNumber(currentResult.total)} / 60`,
     `Percentage: ${formatNumber(currentResult.percentage)}%`
   ].join("\n");
 }
 
-/**
- * Copy results to clipboard.
- */
 function copyResults() {
   const text = generateResultText();
   if (!text) return;
@@ -396,29 +564,29 @@ function copyResults() {
         actionFeedback.textContent = "Results copied to clipboard.";
       })
       .catch(() => {
-        actionFeedback.textContent = "Failed to copy to clipboard.";
+        fallbackCopy(text);
       });
   } else {
-    // Fallback for browsers without navigator.clipboard
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.style.position = "fixed";
-    textarea.style.opacity = "0";
-    document.body.appendChild(textarea);
-    textarea.select();
-    try {
-      document.execCommand("copy");
-      actionFeedback.textContent = "Results copied to clipboard.";
-    } catch (err) {
-      actionFeedback.textContent = "Failed to copy to clipboard.";
-    }
-    document.body.removeChild(textarea);
+    fallbackCopy(text);
   }
 }
 
-/**
- * Share results using Web Share API with fallback to copy.
- */
+function fallbackCopy(text) {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    document.execCommand("copy");
+    actionFeedback.textContent = "Results copied to clipboard.";
+  } catch (err) {
+    actionFeedback.textContent = "Failed to copy to clipboard.";
+  }
+  document.body.removeChild(textarea);
+}
+
 function shareResults() {
   const text = generateResultText();
   if (!text) return;
@@ -435,7 +603,6 @@ function shareResults() {
         actionFeedback.textContent = "Shared successfully.";
       })
       .catch((err) => {
-        // User cancellation is not considered an error to report
         if (err.name !== "AbortError") {
           copyResults();
         }
@@ -445,16 +612,36 @@ function shareResults() {
   }
 }
 
-// Event Listeners
-calculateBtn.addEventListener("click", calculateMarks);
+/* ==========================================================================
+   8. Event Listeners & Initialization
+   ========================================================================== */
+
+// Buttons
+calculateBtn.addEventListener("click", () => calculateMarks(false));
 resetBtn.addEventListener("click", resetForm);
 saveSubjectBtn.addEventListener("click", saveCurrentCalculation);
 copyResultBtn.addEventListener("click", copyResults);
 shareResultBtn.addEventListener("click", shareResults);
 clearAllBtn.addEventListener("click", clearAllCalculations);
 
-// Real-time error clearance on input edit
-[
+// Attendance / Performance category option pills
+attendancePills.forEach((pill) => {
+  pill.addEventListener("click", () => {
+    const tierId = pill.getAttribute("data-tier-id");
+    setAttendanceTier(tierId);
+  });
+
+  pill.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      const tierId = pill.getAttribute("data-tier-id");
+      setAttendanceTier(tierId);
+    }
+  });
+});
+
+// Real-time instant calculation & hint updates on input
+const allInputs = [
   fa1Input,
   cla1Input,
   fa2Input,
@@ -464,13 +651,38 @@ clearAllBtn.addEventListener("click", clearAllCalculations);
   fa4Input,
   cla4Input,
   cla5Input
-].forEach((el) => {
+];
+
+allInputs.forEach((el) => {
   el.addEventListener("input", () => {
     if (validationMessage.classList.contains("active")) {
       clearValidation();
     }
+    updateCla5Hint();
+    // Instant live calculation
+    calculateMarks(true);
   });
 });
 
-// Initialize saved calculations display on load
-document.addEventListener("DOMContentLoaded", renderSavedList);
+if (subjectNameInput) {
+  subjectNameInput.addEventListener("input", () => {
+    if (currentResult) {
+      const subjectName = subjectNameInput.value.trim();
+      currentResult.subject = subjectName;
+      if (subjectName) {
+        resultSubject.textContent = subjectName;
+        resultSubject.style.display = "block";
+      } else {
+        resultSubject.textContent = "";
+        resultSubject.style.display = "none";
+      }
+    }
+  });
+}
+
+// Initialize on DOM load
+document.addEventListener("DOMContentLoaded", () => {
+  updatePillVisuals();
+  updateCla5Hint();
+  renderSavedList();
+});
